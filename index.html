@@ -1,74 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Camera Test with face-api.js</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Room Counter</title>
   <style>
     body {
+      font-family: Arial, sans-serif;
+      background: #f0f0f0;
+      display: flex;
+      height: 100vh;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+    }
+
+    .container {
+      background: #fff;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
       text-align: center;
-      font-family: sans-serif;
-      background-color: #f0f0f0;
     }
-    video {
-      width: 720px;
-      height: 560px;
-      border-radius: 8px;
-      margin-top: 20px;
+
+    .count {
+      font-size: 4rem;
+      margin: 1rem 0;
+      color: #333;
     }
-    #count {
-      margin-top: 20px;
-      font-size: 24px;
+
+    .buttons button {
+      margin: 0.5rem;
+      padding: 0.5rem 1.5rem;
+      font-size: 1.2rem;
+      border: none;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .buttons button:nth-child(1) {
+      background-color: #4CAF50;
+      color: white;
+    }
+
+    .buttons button:nth-child(2) {
+      background-color: #f44336;
+      color: white;
+    }
+
+    .buttons button:nth-child(3) {
+      background-color: #2196F3;
+      color: white;
+    }
+
+    .buttons button:hover {
+      opacity: 0.9;
     }
   </style>
 </head>
 <body>
-  <h1>Face Detection Headcount</h1>
-  <video id="video" autoplay muted playsinline></video>
-  <canvas id="canvas" style="position:absolute;"></canvas>
-  <div id="count">Loading models...</div>
+  <div class="container">
+    <h1>People in Room</h1>
+    <div class="count" id="count">0</div>
+    <div class="buttons">
+      <button onclick="addPerson()">Add</button>
+      <button onclick="removePerson()">Remove</button>
+      <button onclick="resetCount()">Reset</button>
+    </div>
+  </div>
 
-  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const countText = document.getElementById('count');
+    let count = 0;
+    const countDisplay = document.getElementById("count");
 
-    async function start() {
-      try {
-        // Load face-api.js models
-        await faceapi.nets.tinyFaceDetector.loadFromUri('https://justadudewhohacks.github.io/face-api.js/models');
+    function updateDisplay() {
+      countDisplay.textContent = count;
+    }
 
-        // Access the webcam
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
+    function addPerson() {
+      count++;
+      updateDisplay();
+    }
 
-        video.onloadedmetadata = () => {
-          video.play();
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          detect();
-        };
-      } catch (err) {
-        console.error('Error accessing webcam:', err);
-        countText.textContent = '❌ Could not access webcam. Make sure you allow permissions.';
+    function removePerson() {
+      if (count > 0) {
+        count--;
+        updateDisplay();
       }
     }
 
-    async function detect() {
-      const displaySize = { width: video.videoWidth, height: video.videoHeight };
-      faceapi.matchDimensions(canvas, displaySize);
-
-      setInterval(async () => {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        const resized = faceapi.resizeResults(detections, displaySize);
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        faceapi.draw.drawDetections(canvas, resized);
-        countText.textContent = `👥 People detected: ${resized.length}`;
-      }, 500);
+    function resetCount() {
+      count = 0;
+      updateDisplay();
     }
-
-    start();
   </script>
 </body>
 </html>
