@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Room People Counter (Rear Camera)</title>
+  <title>Classroom Headcount</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -23,29 +23,49 @@
       font-size: 2rem;
       margin: 1rem 0;
     }
+    button {
+      padding: 10px 20px;
+      font-size: 1.2rem;
+      margin-bottom: 20px;
+      border: none;
+      border-radius: 8px;
+      background-color: #28a745;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #218838;
+    }
   </style>
 </head>
 <body>
-  <h1>Live People Counter</h1>
-  <div class="counter">People detected: <span id="count">0</span></div>
-  <video id="video" width="640" height="480" autoplay muted playsinline></video>
-  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+  <h1>Classroom Headcount</h1>
+  <button id="startBtn">Start Headcount</button>
+  <div class="counter">Final Count: <span id="count">0</span></div>
+  <video id="video" width="640" height="480" autoplay muted playsinline style="display:none;"></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
 
   <!-- TensorFlow.js + Coco SSD -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
   <script>
+    const startBtn = document.getElementById('startBtn');
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
-    const context = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
     const countDisplay = document.getElementById('count');
+
+    let model;
+
+    async function loadModel() {
+      model = await cocoSsd.load();
+      console.log("Model loaded.");
+    }
 
     async function setupCamera() {
       const constraints = {
-        video: {
-          facingMode: { exact: "environment" } // Use rear camera
-        },
+        video: { facingMode: { exact: "environment" } },
         audio: false
       };
 
@@ -56,33 +76,80 @@
           video.onloadedmetadata = () => resolve(video);
         });
       } catch (error) {
-        alert("Could not access rear camera. Using default camera instead.");
-        return navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-          .then(stream => {
-            video.srcObject = stream;
-            return new Promise(resolve => {
-              video.onloadedmetadata = () => resolve(video);
-            });
-          });
+        alert("Rear camera not available, using default camera.");
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        video.srcObject = fallbackStream;
+        return new Promise(resolve => {
+          video.onloadedmetadata = () => resolve(video);
+        });
       }
     }
 
-    async function detectPeople() {
-      const model = await cocoSsd.load();
-      console.log("Model loaded.");
+    async function detectFor30Seconds() {
+      const uniqueBoxes = [];
 
-      setInterval(async () => {
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const endTime = Date.now() + 30000; // 30 seconds
+      const detectionInterval = 1000; // every 1 second
+
+      const detectLoop = setInterval(async () => {
+        if (Date.now() >= endTime) {
+          clearInterval(detectLoop);
+          drawFinalBoxes(uniqueBoxes);
+          return;
+        }
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const predictions = await model.detect(canvas);
-        const personCount = predictions.filter(p => p.class === 'person' && p.score > 0.5).length;
-        countDisplay.textContent = personCount;
-      }, 1000); // update every 1 second
+
+        // Filter only 'person' with high confidence
+        const persons = predictions.filter(p => p.class === 'person' && p.score > 0.5);
+
+        // Store unique boxes to avoid duplicates (based on position)
+        persons.forEach(person => {
+          const existing = uniqueBoxes.find(b =>
+            Math.abs(b.bbox[0] - person.bbox[0]) < 20 &&
+            Math.abs(b.bbox[1] - person.bbox[1]) < 20
+          );
+          if (!existing) {
+            uniqueBoxes.push(person);
+          }
+        });
+      }, detectionInterval);
     }
 
-    setupCamera().then(() => {
-      video.play();
-      detectPeople();
-    });
+    function drawFinalBoxes(boxes) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      boxes.forEach(item => {
+        const [x, y, width, height] = item.bbox;
+        ctx.beginPath();
+        ctx.rect(x, y, width, height);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#00FF00";
+        ctx.stroke();
+        ctx.font = "16px Arial";
+        ctx.fillStyle = "#00FF00";
+        ctx.fillText("Person", x, y > 10 ? y - 5 : 10);
+      });
+
+      countDisplay.textContent = boxes.length;
+      startBtn.disabled = false;
+      startBtn.textContent = "Start Headcount Again";
+    }
+
+    async function startHeadcount() {
+      startBtn.disabled = true;
+      startBtn.textContent = "Detecting (30s)...";
+      countDisplay.textContent = "Counting...";
+
+      await loadModel();
+      await setupCamera();
+      video.style.display = "block";
+      canvas.style.display = "block";
+
+      await detectFor30Seconds();
+    }
+
+    startBtn.addEventListener('click', startHeadcount);
   </script>
 </body>
 </html>
