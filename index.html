@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Camera Person Counter</title>
+  <title>Room People Counter (Rear Camera)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -28,7 +28,7 @@
 <body>
   <h1>Live People Counter</h1>
   <div class="counter">People detected: <span id="count">0</span></div>
-  <video id="video" width="640" height="480" autoplay muted></video>
+  <video id="video" width="640" height="480" autoplay muted playsinline></video>
   <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 
   <!-- TensorFlow.js + Coco SSD -->
@@ -42,14 +42,29 @@
     const countDisplay = document.getElementById('count');
 
     async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+      const constraints = {
+        video: {
+          facingMode: { exact: "environment" } // Use rear camera
+        },
         audio: false
-      });
-      video.srcObject = stream;
-      return new Promise(resolve => {
-        video.onloadedmetadata = () => resolve(video);
-      });
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        return new Promise(resolve => {
+          video.onloadedmetadata = () => resolve(video);
+        });
+      } catch (error) {
+        alert("Could not access rear camera. Using default camera instead.");
+        return navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          .then(stream => {
+            video.srcObject = stream;
+            return new Promise(resolve => {
+              video.onloadedmetadata = () => resolve(video);
+            });
+          });
+      }
     }
 
     async function detectPeople() {
@@ -59,7 +74,6 @@
       setInterval(async () => {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         const predictions = await model.detect(canvas);
-
         const personCount = predictions.filter(p => p.class === 'person' && p.score > 0.5).length;
         countDisplay.textContent = personCount;
       }, 1000); // update every 1 second
